@@ -1,0 +1,32 @@
+# Publica uma versão do Forja.
+# Quem envia sobe um galho "envio/vX.Y.Z" com o instalador em partes (pasta envio/).
+# Aqui as partes são juntadas, o Release é criado e o galho é apagado.
+name: Publicar versão
+on:
+  push:
+    branches: ['envio/**']
+permissions:
+  contents: write
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Juntar o instalador e publicar
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cd envio
+          versao=$(sed -n 's/^version: //p' latest.yml)
+          exe="Forja-Setup-${versao}.exe"
+          cat parte-* > "$exe"
+          echo "$(cat sha256.txt)  $exe" | sha256sum -c -
+          notas=$(cat notas.txt 2>/dev/null || echo "Forja ${versao}")
+          gh release create "v${versao}" "$exe" "$exe.blockmap" latest.yml \
+            --repo "$GITHUB_REPOSITORY" --target main --title "Forja ${versao}" --notes "$notas"
+      - name: Apagar o galho de envio
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/${GITHUB_REF_NAME}"
